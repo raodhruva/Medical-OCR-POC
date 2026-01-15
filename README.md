@@ -18,8 +18,7 @@ Create a file named .env in the project root:
 
 GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE
 PORT=5055
-
-Do not commit this file to git.
+GOOGLE_APPLICATION_CREDENTIALS=./your-service-account-key.json
 
 4. Start the app (frontend + backend)
 

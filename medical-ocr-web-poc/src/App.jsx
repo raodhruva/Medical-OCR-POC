@@ -13,6 +13,7 @@ export default function App() {
 
   const [aiText, setAiText] = useState("");
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [ocrProvider, setOcrProvider] = useState("tesseract");
 
   const canRunOcr = useMemo(
     () => !!imageFile && !isOcrRunning,
@@ -62,15 +63,46 @@ export default function App() {
     setAiText("");
 
     try {
-      const result = await Tesseract.recognize(imageFile, "eng", {
-        logger: (m) => {
-          if (typeof m.progress === "number") {
-            setProgress(Math.round(m.progress * 100));
-          }
-        },
-      });
+      let raw = "";
 
-      const raw = result?.data?.text ?? "";
+      if (ocrProvider === "tesseract") {
+        // client-side OCR with tesseract
+        const result = await Tesseract.recognize(imageFile, "eng", {
+          logger: (m) => {
+            if (typeof m.progress === "number") {
+              setProgress(Math.round(m.progress * 100));
+            }
+          },
+        });
+        raw = result?.data?.text ?? "";
+      } else if (ocrProvider === "cloud-vision") {
+        // server side OCR with GCV
+        setProgress(10);
+
+        //convert image to base64
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(imageFile);
+        });
+
+        setProgress(30);
+
+        const resp = await fetch("http://localhost:5055/api/ocr/cloud-vision", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image: base64 }),
+        });
+
+        setProgress(80);
+
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.error || data.details || "Cloud Vision OCR failed");
+
+        raw = data.text || "";
+        setProgress(100);
+      }
 
       const cleaned = raw
         .split("\n")
@@ -176,6 +208,14 @@ export default function App() {
       opacity: 0.45,
       cursor: "not-allowed",
     },
+    select: {
+      padding: "10px 14px",
+      borderRadius: 12,
+      border: "1px solid rgba(15,23,42,0.12)",
+      background: "white",
+      fontWeight: 500,
+      cursor: "pointer",
+    },
     error: {
       marginTop: 12,
       padding: 12,
@@ -267,6 +307,15 @@ export default function App() {
               accept="image/*"
               onChange={onPickFile}
             />
+
+            <select
+              value={ocrProvider}
+              onChange={(e) => setOcrProvider(e.target.value)}
+              style={styles.select}
+            >
+              <option value="tesseract">Browser (Tesseract.js)</option>
+              <option value="cloud-vision">Cloud (Google Vision)</option>
+            </select>
 
             <button
               onClick={runOcr}
